@@ -24,6 +24,27 @@ def sauvegarde (temperature_blue, temperature_green, temperature_yellow, date, e
     fichierSauvegarde.write(str(temperature_average)+'\r\n')
     fichierSauvegarde.close()
 
+# fonction pour renseigner les infos dans l'API request
+def upload_data_api(TEMPERATURE_GREEN, HUMIDITY, TEMP_BLUE):
+    API_ENDPOINT = "https://api.sensorsfolie.xyz/api/sensors"
+    # data to be sent to api
+    data = {
+        "humidity_flat": HUMIDITY,
+        "temp_flat": TEMPERATURE_GREEN,
+        "temp_paris": TEMP_BLUE,
+        "id_sensors": "ClunyStreet_hackedfridge"
+    }
+
+    # headers to be sent to api
+    headers = {'Authorization' : 'Basic YWRtaW46VDZoZ0Y4ISVTRA==', 'Accept' : 'application/json', 'Content-Type' : 'application/json'}
+
+    # sending post request and saving response as response object
+    r = requests.post(url = API_ENDPOINT, data = json.dumps(data), headers = headers)
+
+    # extracting response text
+    pastebin_url = r.text
+    print("The pastebin URL is:%s"%pastebin_url)
+
 while True :
     date = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     contenuFich_blue = lireFichier("/sys/bus/w1/devices/28-fdda8f1d64ff/w1_slave")
@@ -33,5 +54,9 @@ while True :
     contenuFich_yellow = lireFichier("/sys/bus/w1/devices/28-97d68f1d64ff/w1_slave")
     temperature_yellow = recupTemp(contenuFich_yellow)
     sauvegarde(temperature_blue, temperature_green, temperature_yellow, date, "TemperatureTexte.csv")
+    humidity = 0
+    upload_data_api(temperature_green, humidity, temperature_blue)
+
+
     time.sleep(2000)
 
