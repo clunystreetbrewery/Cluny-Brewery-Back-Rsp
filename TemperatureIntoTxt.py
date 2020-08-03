@@ -2,8 +2,27 @@ import time
 import datetime
 import sqlite3
 import csv
+import requests
+import RPi.GPIO as GPIO
 
-
+def toggleFridge (temp):
+    print("temperature blue : " + str(temp))
+    GPIO.setmode(GPIO.BCM)
+    GPIO.setwarnings(False)
+    channel = 15
+    GPIO.setup(channel, GPIO.OUT)
+    fridgeStatus = GPIO.input(channel)
+    print("fridgeStatus : " + str(fridgeStatus))
+    if fridgeStatus == 1:
+        if temp < 11:
+            GPIO.output(15, 0)
+            print("turning fridge off")
+    else:
+        if temp > 15:
+            GPIO.output(15, 1)
+            print("turning fridge on")
+    print("new fridge status : " + str(GPIO.input(channel)))
+    # GPIO.cleanup()
 
 def lireFichier (emplacement) :
     fichTemp = open(emplacement)
@@ -23,17 +42,12 @@ def sauvegarde (temperature_blue, temperature_green, temperature_yellow, date, e
     fichierSauvegarde.write(str(date)+";")
     fichierSauvegarde.write(str(temperature_blue)+";")
     fichierSauvegarde.write(str(temperature_green)+";")
-    fichierSauvegarde.write(str(temperature_yellow)+";")
-    temperature_average = (temperature_blue + temperature_green + temperature_yellow) / 3
-    fichierSauvegarde.write(str(temperature_average)+'\r\n')
-    fichierSauvegarde.close()
-
 
 def sauvegardeDansDb(temperature_blue, temperature_green, temperature_yellow, date, db):
     temperature_average = (temperature_blue + temperature_green + temperature_yellow) / 3
     conn = sqlite3.connect(db)
     c = conn.cursor()
-    c.execute("INSERT INTO temperatures_v2_1(date,  temperature_blue, temperature_green, temperature_yellow, temperature_average) VALUES (?, ?, ?, ?, ?)", (date, temperature_blue, temperature_green, temperature_yellow, temperature_average))
+    c.execute("INSERT INTO temperatures(date,  temperature_blue, temperature_green, temperature_yellow, temperature_average) VALUES (?, ?, ?, ?, ?)", (date, temperature_blue, tempe$
     conn.commit()
     conn.close()
 
@@ -45,41 +59,20 @@ def sauvegardeDansDb_old(temperature_blue, temperature_green, temperature_yellow
     conn.commit()
     conn.close()
 
-
-# fonction pour renseigner les infos dans l'API request
-def upload_data_api(TEMPERATURE_GREEN, HUMIDITY, TEMP_BLUE):
-    API_ENDPOINT = "https://api.sensorsfolie.xyz/api/sensors"
-    # data to be sent to api
-    data = {
-        "humidity_flat": HUMIDITY,
-        "temp_flat": TEMPERATURE_GREEN,
-        "temp_paris": TEMP_BLUE,
-        "id_sensors": "ClunyStreet_hackedfridge"
-    }
-
-    # headers to be sent to api
-    headers = {'Authorization' : 'Basic YWRtaW46VDZoZ0Y4ISVTRA==', 'Accept' : 'application/json', 'Content-Type' : 'application/json'}
-
-    # sending post request and saving response as response object
-    r = requests.post(url = API_ENDPOINT, data = json.dumps(data), headers = headers)
-
-    # extracting response text
-    pastebin_url = r.text
-    print("The pastebin URL is:%s"%pastebin_url)
+def postData(temperature_blue, temperature_green, temperature_yellow, date, url):
+    data = {"date": date, "temperature_blue": temperature_blue, "temperature_green":temperature_green,  "temperature_yellow":temperature_yellow}
+    response = requests.post(url, json=data, auth=('rasp', 'apiipa'))
+    print(response.status_code)
 
 
-while True :
-    date = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    contenuFich_blue = lireFichier("/sys/bus/w1/devices/28-fdda8f1d64ff/w1_slave")
-    temperature_blue = recupTemp(contenuFich_blue)
-    contenuFich_green = lireFichier("/sys/bus/w1/devices/28-f5d58f1d64ff/w1_slave")
-    temperature_green = recupTemp(contenuFich_green)
-    contenuFich_yellow = lireFichier("/sys/bus/w1/devices/28-97d68f1d64ff/w1_slave")
-    temperature_yellow = recupTemp(contenuFich_yellow)
-    sauvegarde(temperature_blue, temperature_green, temperature_yellow, date, "/home/pi/Desktop/TemperatureConnected/TemperatureTexte.csv")
-    sauvegardeDansDb(temperature_blue, temperature_green, temperature_yellow, date, "/home/pi/Desktop/TemperatureConnected/temperatures.db")
-    humidity = 0
-    upload_data_api(temperature_green, humidity, temperature_blue)
-    
-    
-    break
+date = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+contenuFich_blue = lireFichier("/sys/bus/w1/devices/28-fdda8f1d64ff/w1_slave")
+temperature_blue = recupTemp(contenuFich_blue)
+contenuFich_green = lireFichier("/sys/bus/w1/devices/28-f5d58f1d64ff/w1_slave")
+temperature_green = recupTemp(contenuFich_green)
+contenuFich_yellow = lireFichier("/sys/bus/w1/devices/28-97d68f1d64ff/w1_slave")
+temperature_yellow = recupTemp(contenuFich_yellow)
+sauvegarde(temperature_blue, temperature_green, temperature_yellow, date, "/home/pi/Desktop/TemperatureConnected/TemperatureTexte.csv")
+sauvegardeDansDb(temperature_blue, temperature_green, temperature_yellow, date, "/home/pi/Desktop/TemperatureConnected/temperatures.db")
+postData(temperature_blue, temperature_green, temperature_yellow, date, "http://3.20.162.22:6789/temperatures/v2.0")
+toggleFridge(temperature_blue)
